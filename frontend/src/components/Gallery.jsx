@@ -6,11 +6,16 @@ import {
 import AnalysisToast from './AnalysisToast.jsx'
 import GalleryHeader from './GalleryHeader.jsx'
 import PhotoGrid from './PhotoGrid.jsx'
-import ReviewQueue from './ReviewQueue.jsx'
 import SelectionFooter from './SelectionFooter.jsx'
+import SwipeReview from './SwipeReview.jsx'
 
 export default function Gallery({ photos }) {
   const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [deletedIds, setDeletedIds] = useState(() => new Set())
+  const [reviewedIds, setReviewedIds] = useState(() => new Set())
+  const [swipeQueue, setSwipeQueue] = useState(null)
+  const [swipeTotal, setSwipeTotal] = useState(0)
+  const [decisionHistory, setDecisionHistory] = useState([])
   const [selecting, setSelecting] = useState(false)
   const [analysisPhase, setAnalysisPhase] = useState('idle')
   const [analyzedCount, setAnalyzedCount] = useState(0)
@@ -20,12 +25,16 @@ export default function Gallery({ photos }) {
   const [analyzedPhotos, setAnalyzedPhotos] = useState([])
   const [reviewPhotos, setReviewPhotos] = useState([])
   const [newReviewCount, setNewReviewCount] = useState(0)
-  const [showReviewPhotos, setShowReviewPhotos] = useState(false)
   const [toast, setToast] = useState('')
   const timer = useRef(null)
   const toastTimer = useRef(null)
-  const selectedPhotos = photos.filter((photo) => selectedIds.has(photo.id))
+  const visiblePhotos = photos.filter((photo) => !deletedIds.has(photo.id))
+  const selectedPhotos = visiblePhotos.filter((photo) => selectedIds.has(photo.id))
   const selectedCount = selectedPhotos.length
+  const unresolvedReviewPhotos = reviewPhotos.filter(
+    (photo) => !deletedIds.has(photo.id) && !reviewedIds.has(photo.id),
+  )
+  const swiping = swipeQueue !== null
 
   useEffect(
     () => () => {
@@ -45,7 +54,6 @@ export default function Gallery({ photos }) {
       return next
     })
     setAnalysisPhase('idle')
-    setShowReviewPhotos(false)
     setToast('')
   }
 
@@ -57,11 +65,47 @@ export default function Gallery({ photos }) {
       setAnalyzedCount(0)
       setAnalysisTotal(0)
       setAnalysisProgress(0)
-      setShowReviewPhotos(false)
       setToast('')
       window.clearTimeout(toastTimer.current)
+    } else {
+      setSwipeQueue(null)
     }
     setSelecting((current) => !current)
+  }
+
+  function handleSwipeDecision(photoId, action) {
+    const photo = swipeQueue?.[0]
+    if (!photo || photo.id !== photoId) return
+
+    if (action === 'delete') {
+      setDeletedIds((current) => new Set(current).add(photoId))
+    }
+    setReviewedIds((current) => new Set(current).add(photoId))
+    setDecisionHistory((current) => [...current, { photo, action }])
+    setSwipeQueue((current) => current?.slice(1) ?? null)
+  }
+
+  function undoSwipeDecision() {
+    const previousDecision = decisionHistory.at(-1)
+    if (!previousDecision) return
+
+    setDecisionHistory((current) => current.slice(0, -1))
+    setReviewedIds((current) => {
+      const next = new Set(current)
+      next.delete(previousDecision.photo.id)
+      return next
+    })
+    if (previousDecision.action === 'delete') {
+      setDeletedIds((current) => {
+        const next = new Set(current)
+        next.delete(previousDecision.photo.id)
+        return next
+      })
+    }
+    setSwipeQueue((current) => [
+      previousDecision.photo,
+      ...(current ?? []),
+    ])
   }
 
   function runOptimization() {
@@ -84,7 +128,6 @@ export default function Gallery({ photos }) {
     setAnalysisTotal(total)
     setAnalysisProgress(0)
     setShowAnalysisStatus(false)
-    setShowReviewPhotos(false)
     setToast('')
     setSelectedIds(new Set())
     setSelecting(false)
@@ -124,36 +167,49 @@ export default function Gallery({ photos }) {
       return
     }
 
-    if (reviewPhotos.length > 0 && selectedCount === 0) {
-      setShowReviewPhotos((isVisible) => {
-        if (!isVisible) setNewReviewCount(0)
-        return !isVisible
-      })
+    if (unresolvedReviewPhotos.length > 0 && selectedCount === 0) {
+      setNewReviewCount(0)
+      setToast('')
+      setDecisionHistory([])
+      setSwipeTotal(unresolvedReviewPhotos.length)
+      setSwipeQueue(unresolvedReviewPhotos)
       return
     }
 
     runOptimization()
   }
 
+  if (swiping) {
+    return (
+      <SwipeReview
+        photos={swipeQueue}
+        totalPhotos={swipeTotal}
+        canUndo={decisionHistory.length > 0}
+        onDecision={handleSwipeDecision}
+        onUndo={undoSwipeDecision}
+        onClose={() => setSwipeQueue(null)}
+      />
+    )
+  }
+
   return (
     <>
       <GalleryHeader
-        photosCount={photos.length}
+        photosCount={visiblePhotos.length}
         analysisPhase={analysisPhase}
         analyzedCount={analyzedCount}
         analysisTotal={analysisTotal}
         analysisProgress={analysisProgress}
         showAnalysisStatus={showAnalysisStatus}
-        reviewCount={reviewPhotos.length}
+        reviewCount={unresolvedReviewPhotos.length}
         newReviewCount={newReviewCount}
         selectedCount={selectedCount}
         selecting={selecting}
-        showReviewPhotos={showReviewPhotos}
         onOptimizerClick={handleOptimizerClick}
         onSelectModeToggle={toggleSelectMode}
       />
       <PhotoGrid
-        photos={photos}
+        photos={visiblePhotos}
         selectedIds={selectedIds}
         selecting={selecting && analysisPhase === 'idle'}
         onPhotoClick={toggleSelection}
@@ -162,13 +218,6 @@ export default function Gallery({ photos }) {
         <SelectionFooter selectedCount={selectedCount} />
       )}
       <AnalysisToast message={toast} />
-      {showReviewPhotos && (
-        <ReviewQueue
-          photos={reviewPhotos}
-          newPhotoCount={newReviewCount}
-          onClose={() => setShowReviewPhotos(false)}
-        />
-      )}
     </>
   )
 }

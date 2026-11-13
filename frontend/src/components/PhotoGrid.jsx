@@ -8,7 +8,7 @@ export default function PhotoGrid({
 }) {
   return (
     <div
-      className={`hide-scrollbar absolute inset-x-0 top-0 overflow-y-auto overscroll-contain bg-white ${
+      className={`hide-scrollbar absolute inset-x-0 top-0 overflow-y-auto overscroll-contain bg-black ${
         selecting ? 'bottom-[52px]' : 'bottom-0'
       }`}
     >

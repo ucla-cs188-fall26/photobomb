@@ -12,11 +12,13 @@ export default function GalleryHeader({
   newReviewCount,
   selectedCount,
   selecting,
-  showReviewPhotos,
   onOptimizerClick,
   onSelectModeToggle,
 }) {
   const reviewing = reviewCount > 0 && selectedCount === 0
+  const reviewDescription = `${reviewCount} ${
+    reviewCount === 1 ? 'photo' : 'photos'
+  }`
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-10">
@@ -59,7 +61,7 @@ export default function GalleryHeader({
                 analysisPhase === 'running'
                   ? `Show analysis progress, ${analyzedCount} of ${analysisTotal} photos`
                   : reviewing
-                    ? `Review ${reviewCount} photos${
+                    ? `Review ${reviewDescription}${
                         newReviewCount > 0 ? `, ${newReviewCount} new` : ''
                       }`
                     : 'AI Optimize'
@@ -67,9 +69,7 @@ export default function GalleryHeader({
               aria-expanded={
                 analysisPhase === 'running'
                   ? showAnalysisStatus
-                  : reviewing
-                    ? showReviewPhotos
-                    : undefined
+                  : undefined
               }
               aria-describedby={
                 analysisPhase === 'running' && showAnalysisStatus
@@ -84,7 +84,7 @@ export default function GalleryHeader({
               onClick={onOptimizerClick}
               title={
                 reviewing
-                  ? `Review ${reviewCount} photos${
+                  ? `Review ${reviewDescription}${
                       newReviewCount > 0 ? ` · ${newReviewCount} new` : ''
                     }`
                   : selectedCount === 0 && analysisPhase === 'idle'
