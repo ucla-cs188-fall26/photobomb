@@ -31,6 +31,11 @@ export const analysisData = {
   'photo-30': { sharpness: 0.4, exposure: 0.43, similarTo: null },
 }
 
+export const reviewTargets = {
+  sharpness: 0.45,
+  exposure: 0.3,
+}
+
 export function scorePhotos(photosToScore) {
   return photosToScore.map((photo) => {
     const metrics = analysisData[photo.id]
@@ -74,6 +79,7 @@ export function getOptimizationSuggestions(analyzedPhotos) {
   }
 
   const duplicateKeepers = new Map()
+  const duplicateCounts = new Map()
   for (const group of groups.values()) {
     if (group.length < 2) continue
     const keeper = group.reduce((best, photo) => {
@@ -82,19 +88,50 @@ export function getOptimizationSuggestions(analyzedPhotos) {
       return photoQuality > bestQuality ? photo : best
     })
     for (const photo of group) {
-      if (photo.id !== keeper.id) duplicateKeepers.set(photo.id, keeper)
+      if (photo.id !== keeper.id) {
+        duplicateKeepers.set(photo.id, keeper)
+        duplicateCounts.set(photo.id, group.length - 1)
+      }
     }
   }
 
   return analyzedPhotos.flatMap((photo) => {
     const reasons = []
-    if (photo.metrics.sharpness < 0.45) reasons.push('May be blurry')
-    if (photo.metrics.exposure < 0.3) reasons.push('Very dark')
+    const reasonDetails = []
     const keeper = duplicateKeepers.get(photo.id)
+    const similarCount = duplicateCounts.get(photo.id)
+    if (photo.metrics.sharpness < reviewTargets.sharpness) {
+      reasons.push('May be blurry')
+      reasonDetails.push({
+        label: 'Blurry',
+        scoreKeys: ['sharpness'],
+        explanation: `This photo falls below your sharpness preference${
+          keeper && keeper.metrics.sharpness > photo.metrics.sharpness
+            ? ', and a sharper shot of this scene exists'
+            : ''
+        }.`,
+      })
+    }
+    if (photo.metrics.exposure < reviewTargets.exposure) {
+      reasons.push('Very dark')
+      reasonDetails.push({
+        label: 'Too dark',
+        scoreKeys: ['exposure'],
+        explanation: 'This photo is darker than your preference.',
+      })
+    }
     if (keeper) {
       reasons.push(`Similar to ${keeper.label}`)
+      reasonDetails.push({
+        label: 'Near-duplicate',
+        detail: `This is a duplicate of ${similarCount} other selected ${
+          similarCount === 1 ? 'photo' : 'photos'
+        }.`,
+      })
     }
 
-    return reasons.length ? [{ ...photo, reasons }] : []
+    return reasons.length
+      ? [{ ...photo, reasons, reasonDetails, keeperPhoto: keeper ?? null }]
+      : []
   })
 }
