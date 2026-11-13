@@ -1,14 +1,42 @@
-import { useState } from 'react'
-import { BatteryFull, Check, Signal, Wifi } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import {
+  getOptimizationSuggestions,
+  scorePhotos,
+} from '../lib/analysisData.js'
+import AnalysisToast from './AnalysisToast.jsx'
+import GalleryHeader from './GalleryHeader.jsx'
+import PhotoGrid from './PhotoGrid.jsx'
+import ReviewQueue from './ReviewQueue.jsx'
+import SelectionFooter from './SelectionFooter.jsx'
 
 export default function Gallery({ photos }) {
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [selecting, setSelecting] = useState(false)
+  const [analysisPhase, setAnalysisPhase] = useState('idle')
+  const [analyzedCount, setAnalyzedCount] = useState(0)
+  const [analysisTotal, setAnalysisTotal] = useState(0)
+  const [analysisProgress, setAnalysisProgress] = useState(0)
+  const [showAnalysisStatus, setShowAnalysisStatus] = useState(false)
+  const [analyzedPhotos, setAnalyzedPhotos] = useState([])
+  const [reviewPhotos, setReviewPhotos] = useState([])
+  const [newReviewCount, setNewReviewCount] = useState(0)
+  const [showReviewPhotos, setShowReviewPhotos] = useState(false)
+  const [toast, setToast] = useState('')
+  const timer = useRef(null)
+  const toastTimer = useRef(null)
   const selectedPhotos = photos.filter((photo) => selectedIds.has(photo.id))
   const selectedCount = selectedPhotos.length
 
+  useEffect(
+    () => () => {
+      window.clearInterval(timer.current)
+      window.clearTimeout(toastTimer.current)
+    },
+    [],
+  )
+
   function toggleSelection(id) {
-    if (!selecting) return
+    if (!selecting || analysisPhase === 'running') return
 
     setSelectedIds((current) => {
       const next = new Set(current)
@@ -16,104 +44,130 @@ export default function Gallery({ photos }) {
       else next.add(id)
       return next
     })
+    setAnalysisPhase('idle')
+    setShowReviewPhotos(false)
+    setToast('')
   }
 
   function toggleSelectMode() {
-    if (selecting) setSelectedIds(new Set())
+    if (selecting) {
+      window.clearInterval(timer.current)
+      setSelectedIds(new Set())
+      setAnalysisPhase('idle')
+      setAnalyzedCount(0)
+      setAnalysisTotal(0)
+      setAnalysisProgress(0)
+      setShowReviewPhotos(false)
+      setToast('')
+      window.clearTimeout(toastTimer.current)
+    }
     setSelecting((current) => !current)
+  }
+
+  function runOptimization() {
+    if (selectedCount === 0 || analysisPhase !== 'idle') return
+
+    const analyzedIds = new Set(analyzedPhotos.map((photo) => photo.id))
+    const newPhotos = selectedPhotos.filter((photo) => !analyzedIds.has(photo.id))
+    const newlyScoredPhotos = scorePhotos(newPhotos)
+    const nextAnalyzedPhotos = [...analyzedPhotos, ...newlyScoredPhotos]
+    const total = newPhotos.length
+    const previousReviewIds = new Set(reviewPhotos.map((photo) => photo.id))
+    const photosToReview = getOptimizationSuggestions(nextAnalyzedPhotos)
+    const addedReviewCount = photosToReview.filter(
+      (photo) => !previousReviewIds.has(photo.id),
+    ).length
+    window.clearInterval(timer.current)
+    window.clearTimeout(toastTimer.current)
+    setAnalysisPhase('running')
+    setAnalyzedCount(0)
+    setAnalysisTotal(total)
+    setAnalysisProgress(0)
+    setShowAnalysisStatus(false)
+    setShowReviewPhotos(false)
+    setToast('')
+    setSelectedIds(new Set())
+    setSelecting(false)
+
+    const duration = total > 0 ? Math.max(100, 1800 / total) * total : 100
+    const startedAt = performance.now()
+    timer.current = window.setInterval(() => {
+      const progress = Math.min(1, (performance.now() - startedAt) / duration)
+      setAnalysisProgress(progress)
+      setAnalyzedCount(Math.floor(progress * total))
+
+      if (progress >= 1) {
+        window.clearInterval(timer.current)
+        setAnalyzedCount(total)
+        setAnalyzedPhotos(nextAnalyzedPhotos)
+        setReviewPhotos(photosToReview)
+        setNewReviewCount(addedReviewCount)
+        setAnalysisPhase('done')
+        setShowAnalysisStatus(false)
+        setToast(
+          photosToReview.length
+            ? `Analysis complete · ${photosToReview.length} ${
+                photosToReview.length === 1 ? 'photo needs' : 'photos need'
+              } review${addedReviewCount ? ` · ${addedReviewCount} new` : ''}`
+            : total === 0
+              ? 'No new photos to analyze · existing review queue kept'
+              : 'Analysis complete · no photos need review',
+        )
+        toastTimer.current = window.setTimeout(() => setToast(''), 4000)
+      }
+    }, 16)
+  }
+
+  function handleOptimizerClick() {
+    if (analysisPhase === 'running') {
+      setShowAnalysisStatus((isVisible) => !isVisible)
+      return
+    }
+
+    if (reviewPhotos.length > 0 && selectedCount === 0) {
+      setShowReviewPhotos((isVisible) => {
+        if (!isVisible) setNewReviewCount(0)
+        return !isVisible
+      })
+      return
+    }
+
+    runOptimization()
   }
 
   return (
     <>
-      <div className="absolute inset-x-0 top-0 z-10">
-        <div
-          className="absolute inset-0 bg-black/30 backdrop-blur-[4px] [mask-image:linear-gradient(to_bottom,black_0%,black_65%,transparent_100%)]"
-          aria-hidden="true"
+      <GalleryHeader
+        photosCount={photos.length}
+        analysisPhase={analysisPhase}
+        analyzedCount={analyzedCount}
+        analysisTotal={analysisTotal}
+        analysisProgress={analysisProgress}
+        showAnalysisStatus={showAnalysisStatus}
+        reviewCount={reviewPhotos.length}
+        newReviewCount={newReviewCount}
+        selectedCount={selectedCount}
+        selecting={selecting}
+        showReviewPhotos={showReviewPhotos}
+        onOptimizerClick={handleOptimizerClick}
+        onSelectModeToggle={toggleSelectMode}
+      />
+      <PhotoGrid
+        photos={photos}
+        selectedIds={selectedIds}
+        selecting={selecting && analysisPhase === 'idle'}
+        onPhotoClick={toggleSelection}
+      />
+      {selecting && analysisPhase === 'idle' && (
+        <SelectionFooter selectedCount={selectedCount} />
+      )}
+      <AnalysisToast message={toast} />
+      {showReviewPhotos && (
+        <ReviewQueue
+          photos={reviewPhotos}
+          newPhotoCount={newReviewCount}
+          onClose={() => setShowReviewPhotos(false)}
         />
-        <div className="relative z-10 flex h-[52px] items-center justify-between px-7 pt-1 text-[12px] font-semibold text-white">
-          <span>9:41</span>
-          <span className="absolute left-1/2 top-2 h-[22px] w-[92px] -translate-x-1/2 rounded-full bg-black max-sm:hidden" />
-          <div className="flex items-center gap-1">
-            <Signal size={15} strokeWidth={2.4} aria-hidden="true" />
-            <Wifi size={15} strokeWidth={2.4} aria-hidden="true" />
-            <BatteryFull size={17} strokeWidth={2.4} aria-hidden="true" />
-          </div>
-        </div>
-        <header className="relative z-10 flex h-[76px] items-center justify-between px-5">
-          <div className="flex flex-col">
-            <h1 className="m-0 text-[28px] font-bold leading-[30px] tracking-[-0.6px] text-white">
-              Library
-            </h1>
-            <span className="mt-0.5 text-[13px] font-medium text-white">
-              {photos.length} Photos
-            </span>
-          </div>
-          <button
-            className="cursor-pointer rounded-full bg-neutral-800 px-3 py-1 text-[12px] font-medium text-white transition-colors"
-            type="button"
-            aria-pressed={selecting}
-            onClick={toggleSelectMode}
-          >
-            {selecting ? 'Cancel' : 'Select'}
-          </button>
-        </header>
-      </div>
-
-      <div
-        className={`hide-scrollbar absolute inset-x-0 top-0 overflow-y-auto overscroll-contain bg-white ${
-          selecting ? 'bottom-[52px]' : 'bottom-0'
-        }`}
-      >
-        <div className="grid grid-cols-3 gap-0">
-          {photos.map((photo) => {
-            const isSelected = selectedIds.has(photo.id)
-
-            return (
-              <button
-                key={photo.id}
-                className={`group relative block aspect-[4/3] w-full cursor-pointer overflow-hidden border-0 bg-[#ddd] p-0 text-left after:pointer-events-none after:absolute after:inset-0 after:border after:border-black/70 after:content-[''] focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-[#007aff] focus-visible:outline-offset-[-3px] ${
-                  isSelected ? 'z-[1] ring-2 ring-inset ring-[#007aff]' : ''
-                }`}
-                type="button"
-                aria-label={`${isSelected ? 'Deselect' : 'Select'} ${photo.label}`}
-                aria-pressed={selecting ? isSelected : undefined}
-                onClick={() => toggleSelection(photo.id)}
-              >
-                <img
-                  className="absolute inset-0 size-full object-cover"
-                  src={photo.src}
-                  alt={photo.label}
-                  loading="lazy"
-                  draggable="false"
-                />
-                {isSelected && (
-                  <span
-                    className="pointer-events-none absolute inset-0 bg-black/45"
-                    aria-hidden="true"
-                  />
-                )}
-                {selecting && isSelected && (
-                  <span
-                    className="absolute bottom-1.5 right-1.5 grid size-[22px] place-items-center rounded-full border-2 border-white bg-[#007aff] text-white"
-                    aria-hidden="true"
-                  >
-                    <Check size={14} strokeWidth={3} />
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {selecting && (
-        <footer className="absolute inset-x-0 bottom-0 z-10 flex h-[52px] items-center justify-center bg-neutral-700 px-4 text-center text-[13px] text-white font-bold">
-          <span aria-live="polite">
-            {selectedCount === 0
-              ? 'Select Items'
-              : `${selectedCount} ${selectedCount === 1 ? 'Item' : 'Items'} Selected`}
-          </span>
-        </footer>
       )}
     </>
   )
