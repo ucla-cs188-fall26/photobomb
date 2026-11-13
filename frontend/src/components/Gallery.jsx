@@ -6,10 +6,12 @@ import {
 import AnalysisToast from './AnalysisToast.jsx'
 import GalleryHeader from './GalleryHeader.jsx'
 import PhotoGrid from './PhotoGrid.jsx'
+import PreferenceQuiz from './PreferenceQuiz.jsx'
 import SelectionFooter from './SelectionFooter.jsx'
 import SwipeReview from './SwipeReview.jsx'
 
 export default function Gallery({ photos }) {
+  const [showPreferenceQuiz, setShowPreferenceQuiz] = useState(true)
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [deletedIds, setDeletedIds] = useState(() => new Set())
   const [reviewedIds, setReviewedIds] = useState(() => new Set())
@@ -218,6 +220,12 @@ export default function Gallery({ photos }) {
         <SelectionFooter selectedCount={selectedCount} />
       )}
       <AnalysisToast message={toast} />
+      {showPreferenceQuiz && (
+        <PreferenceQuiz
+          photos={photos}
+          onClose={() => setShowPreferenceQuiz(false)}
+        />
+      )}
     </>
   )
 }
