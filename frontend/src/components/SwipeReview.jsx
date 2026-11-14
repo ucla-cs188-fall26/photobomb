@@ -336,45 +336,51 @@ export default function SwipeReview({
               </div>
               </div>
           </div>
-          {flipped && (
-            <section
-              className={`absolute inset-x-0 bottom-0 top-1/4 z-30 flex flex-col overflow-hidden rounded-t-2xl border-t border-white/15 bg-[#202023] shadow-[0_-12px_36px_rgba(0,0,0,0.45)] transition-transform duration-300 ease-out motion-reduce:transition-none ${
-                showAllScores
-                  ? 'translate-y-0'
-                  : 'pointer-events-none translate-y-full'
-              }`}
-              aria-label="All scores"
-              aria-hidden={!showAllScores}
-            >
-              <header className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 py-4">
-                <h2 className="m-0 text-[15px] font-semibold text-white">
-                  All scores
-                </h2>
-                <button
-                  className="grid size-8 place-items-center rounded-full bg-white/10 text-white/75 focus-visible:outline-2 focus-visible:outline-[#82b9ff]"
-                  type="button"
-                  aria-label="Close all scores"
-                  tabIndex={showAllScores ? 0 : -1}
-                  onClick={() => setShowAllScores(false)}
-                >
-                  <X size={17} aria-hidden="true" />
-                </button>
-              </header>
-              <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
-                {Object.keys(reviewTargets)
-                  .map(getScoreMetric)
-                  .filter(Boolean)
-                  .map((metric) => (
-                    <ReviewScoreMeter
-                      key={metric.key}
-                      label={metric.label}
-                      value={metric.value}
-                      target={metric.target}
-                    />
-                  ))}
-              </div>
-            </section>
+          {showAllScores && (
+            <button
+              className="absolute inset-0 z-20 border-0 bg-black/35 p-0 backdrop-blur-xs"
+              type="button"
+              aria-label="Close all scores"
+              onClick={() => setShowAllScores(false)}
+            />
           )}
+          <section
+            className={`absolute inset-x-0 bottom-0 top-1/2 z-30 flex flex-col overflow-hidden rounded-t-2xl border-t border-white/15 bg-[#202023] shadow-[0_-12px_36px_rgba(0,0,0,0.45)] transition-transform duration-300 ease-out motion-reduce:transition-none ${
+              showAllScores
+                ? 'translate-y-0'
+                : 'pointer-events-none translate-y-full'
+            }`}
+            aria-label="All scores"
+            aria-hidden={!showAllScores}
+          >
+            <header className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 py-4">
+              <h2 className="m-0 text-[15px] font-semibold text-white">
+                All scores
+              </h2>
+              <button
+                className="grid size-8 place-items-center rounded-full bg-white/10 text-white/75 focus-visible:outline-2 focus-visible:outline-[#82b9ff]"
+                type="button"
+                aria-label="Close all scores"
+                tabIndex={showAllScores ? 0 : -1}
+                onClick={() => setShowAllScores(false)}
+              >
+                <X size={17} aria-hidden="true" />
+              </button>
+            </header>
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
+              {Object.keys(reviewTargets)
+                .map(getScoreMetric)
+                .filter(Boolean)
+                .map((metric) => (
+                  <ReviewScoreMeter
+                    key={metric.key}
+                    label={metric.label}
+                    value={metric.value}
+                    target={metric.target}
+                  />
+                ))}
+            </div>
+          </section>
           <div className="mt-4 flex shrink-0 items-center justify-center gap-8">
                 <button
                 className="grid size-14 place-items-center rounded-full bg-[#242427] text-red-400 shadow-md transition-transform enabled:hover:scale-105 focus-visible:outline-2 focus-visible:outline-red-400"

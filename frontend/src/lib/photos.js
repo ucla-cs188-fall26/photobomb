@@ -140,11 +140,6 @@ export const photos = [
     src: 'https://images.unsplash.com/photo-1490730141103-6cac27aaab94?auto=format&fit=crop&w=900&q=85',
   },
   {
-    id: 'photo-29',
-    label: 'The shoreline',
-    src: 'https://images.unsplash.com/photo-1473116763249-2ffaa81b3dcb?auto=format&fit=crop&w=900&q=85',
-  },
-  {
     id: 'photo-30',
     label: 'Take the scenic route',
     src: 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=900&q=85',
